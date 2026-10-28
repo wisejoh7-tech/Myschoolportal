@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { toast } from 'sonner';
-import { Mail, Lock, User, LogIn, UserPlus, Eye, EyeOff, AlertCircle, ArrowRight, GraduationCap, Building2, Bell, BookOpen, Fingerprint, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, User, LogIn, UserPlus, Eye, EyeOff, AlertCircle, ArrowRight, GraduationCap, Building2, Bell, BookOpen, Fingerprint, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UniversityName, UserProfile } from '../../types';
 import CandidateRegistrationSlip, { CandidateData } from '../../components/CandidateRegistrationSlip';
@@ -72,6 +72,16 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
           toast.success('Login successful');
           if (userProfile.role === 'admin') {
             navigate('/admin');
+          } else if (userProfile.role === 'school_owner') {
+            navigate('/owner');
+          } else if (userProfile.role === 'bursar') {
+            navigate('/bursar');
+          } else if (userProfile.role === 'teacher') {
+            navigate('/teacher');
+          } else if (userProfile.role === 'parent') {
+            navigate('/parent');
+          } else if (userProfile.role === 'student') {
+            navigate('/portal');
           } else {
             navigate('/');
           }
@@ -193,16 +203,18 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
           )}
 
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-[#008751]/50 uppercase tracking-widest pl-1">Email Address</label>
+            <label className="text-[11px] font-bold text-[#008751]/50 uppercase tracking-widest pl-1">
+              {isLogin ? 'Email Address or Username' : 'Email Address'}
+            </label>
             <div className="relative group">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#008751]/25 group-focus-within:text-[#008751] transition-colors" />
               <input
-                type="email"
+                type={isLogin ? 'text' : 'email'}
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-50 border border-[#008751]/10 focus:border-[#008751]/30 focus:bg-white outline-none transition-all text-[#008751] font-semibold placeholder:text-[#008751]/20 text-sm"
-                placeholder="you@example.com"
+                placeholder={isLogin ? "Username or email@example.com" : "you@example.com"}
               />
             </div>
           </div>
@@ -278,10 +290,19 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
         <div className="pt-6 border-t border-[#008751]/8 text-center space-y-4">
             <button
                onClick={() => { if (resetMode) setResetMode(false); else setIsLogin(!isLogin); }}
-               className="text-sm font-semibold text-[#008751]/50 hover:text-[#008751] transition-colors"
+               className="text-sm font-semibold text-[#008751]/50 hover:text-[#008751] transition-colors block w-full text-center"
             >
                {resetMode ? '← Back to Sign In' : (isLogin ? "Don't have an account? Create one" : 'Already have an account? Sign in')}
             </button>
+            <div className="pt-2">
+              <Link
+                to="/lukke-core-admin-002"
+                className="inline-flex items-center gap-2 text-xs font-bold text-[#008751]/60 hover:text-[#008751] transition-colors bg-slate-50 border border-[#008751]/10 px-4 py-2 rounded-xl"
+              >
+                <ShieldCheck className="w-4 h-4 text-[#008751]" />
+                <span>Admin Access Portal</span>
+              </Link>
+            </div>
         </div>
       </div>
 

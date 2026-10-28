@@ -88,7 +88,7 @@ export default function AdminAuth({ onLoginSuccess }: AdminAuthProps) {
 
         // Verify role
         const userResponse = await api.get('/accounts/user/');
-        if (userResponse.data.role === 'admin') {
+        if (['admin', 'school_owner'].includes(userResponse.data.role)) {
           const djangoUser = userResponse.data;
           const userProfile: UserProfile = {
             uid: djangoUser.id.toString(),
@@ -103,8 +103,8 @@ export default function AdminAuth({ onLoginSuccess }: AdminAuthProps) {
           if (onLoginSuccess) {
             onLoginSuccess(userProfile);
           }
-          toast.success('Welcome back, Admin');
-          navigate('/admin');
+          toast.success(`Welcome back, ${djangoUser.role === 'school_owner' ? 'School Owner' : 'Admin'}`);
+          navigate(djangoUser.role === 'school_owner' ? '/owner' : '/admin');
         } else {
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
