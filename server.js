@@ -2470,6 +2470,7 @@ async function seedDefaultAdmin() {
     const existingAdmin = await User.findOne({
       where: {
         [Op.or]: [
+          { uid: 'usr_admin_default_2026' },
           { email: adminEmail },
           { username: adminUsername },
           { username: adminPrefix },
@@ -2524,10 +2525,11 @@ const startServer = async () => {
   try {
     await sequelize.sync({ alter: true });
     logger.info('🐘 Database synced successfully');
-    await seedDefaultAdmin();
   } catch (err) {
     logger.warn(`⚠️ Database sync bypassed: ${err.message}`);
   }
+
+  await seedDefaultAdmin();
 
   server.listen(PORT, () => {
     logger.info(`🚀 THE BEST UniPortal Server running on port ${PORT}`);
