@@ -1,8 +1,9 @@
-export type UserRole = 'admin' | 'student' | 'staff' | 'applicant';
+export type UserRole = 'school_owner' | 'admin' | 'teacher' | 'bursar' | 'student' | 'parent' | 'staff' | 'applicant';
 export type UniversityName = 'UniPortal' | 'LUKKE' | 'GENERAL';
 
 export interface UserProfile {
   uid: string;
+  tenantId?: string;
   email: string;
   role: UserRole;
   name: string;
@@ -118,12 +119,99 @@ export interface Registration {
 
 export interface Payment {
   id?: string;
-  user: number; // User ID from backend
+  tenantId?: string;
+  uid?: string;
+  invoiceId?: string;
   amount: number;
-  type: 'tuition' | 'hostel' | 'acceptance' | 'other';
+  type: string;
   status: 'pending' | 'success' | 'failed';
-  reference: string;
-  created_at: string;
+  transactionId?: string;
+  reference?: string;
+  method?: string;
+  verifiedOnBackend?: boolean;
+  created_at?: string;
+  createdAt?: string;
+}
+
+export interface FeeInvoice {
+  id: string;
+  tenantId?: string;
+  invoiceNumber: string;
+  studentUid: string;
+  title: string;
+  feeType: string;
+  totalAmount: number;
+  paidAmount: number;
+  balance: number;
+  status: 'unpaid' | 'partial' | 'paid' | 'cancelled';
+  dueDate?: string;
+  session?: string;
+  termOrSemester?: string;
+  createdAt?: string;
+  User?: Partial<UserProfile>;
+}
+
+export interface Receipt {
+  id: string;
+  tenantId?: string;
+  receiptNumber: string;
+  paymentId?: string;
+  invoiceId?: string;
+  studentUid: string;
+  amountPaid: number;
+  paymentMethod: string;
+  issuedBy?: string;
+  issuedAt?: string;
+  User?: Partial<UserProfile>;
+}
+
+export interface ClassAssignment {
+  id: string;
+  tenantId?: string;
+  teacherUid: string;
+  courseCode: string;
+  courseTitle: string;
+  faculty?: string;
+  department?: string;
+  level?: string;
+  academicYear?: string;
+  semester?: string;
+  User?: Partial<UserProfile>;
+}
+
+export interface AcademicResult {
+  id?: string;
+  tenantId?: string;
+  studentUid: string;
+  courseCode: string;
+  courseTitle: string;
+  creditUnits: number;
+  caScore: number;
+  examScore: number;
+  totalScore: number;
+  grade: string;
+  gradePoint: number;
+  semester?: string;
+  level?: string;
+  session?: string;
+  recordedByTeacherUid?: string;
+  isPublished?: boolean;
+  createdAt?: string;
+  User?: Partial<UserProfile>;
+}
+
+export interface AuditLog {
+  id: string;
+  tenantId?: string;
+  actorUid?: string;
+  actorEmail?: string;
+  actorRole?: string;
+  action: string;
+  entity?: string;
+  entityId?: string;
+  details?: Record<string, any>;
+  ipAddress?: string;
+  timestamp?: string;
 }
 
 export interface Hostel {
