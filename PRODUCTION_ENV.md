@@ -24,8 +24,8 @@ The frontend is built using **Vite**. In Vite, environment variables prefixed wi
 
 | Variable | Type | Description | Production Example |
 | :--- | :--- | :--- | :--- |
-| `VITE_API_URL` | String (URL) | Primary HTTP REST API base endpoint consumed by Axios (`src/api/axios.ts`). | `https://uniportal.onrender.com` |
-| `VITE_SOCKET_URL` | String (URL) | WebSocket server endpoint for real-time Socket.io heartbeat connection. | `https://uniportal.onrender.com` |
+| `VITE_API_URL` | String (URL) | Primary HTTP REST API base endpoint consumed by Axios (`src/api/axios.ts`). | `https://uniportal-backend.onrender.com` |
+| `VITE_SOCKET_URL` | String (URL) | WebSocket server endpoint for real-time Socket.io heartbeat connection. | `https://uniportal-backend.onrender.com` |
 | `VITE_FIREBASE_API_KEY` | String | Firebase Web API Key for client authentication. | `AIzaSyB...` |
 | `VITE_FIREBASE_AUTH_DOMAIN` | String | Firebase Authentication domain. | `uniportal-app.firebaseapp.com` |
 | `VITE_FIREBASE_PROJECT_ID` | String | Firebase Project ID. | `uniportal-app` |
@@ -39,6 +39,7 @@ The frontend is built using **Vite**. In Vite, environment variables prefixed wi
 
 * **Static Asset Compilation:** Executing `npm run build` generates optimized static assets inside the `dist/` directory.
 * **SPA Routing & Fallback:** In production, single-page application (SPA) client routes (e.g., `/admin`, `/portal`, `/auth`) are handled by routing requests to `dist/index.html`.
+  * Render Static Site (`render.yaml`): Rewrites `/*` to `/index.html`.
   * Express Backend (`server.js`): Uses `app.use(express.static('dist'))` and `app.get('*', ...)` fallback.
   * Vercel (`vercel.json`): Configured with rewriting rule `{"source": "/(.*)", "destination": "/index.html"}`.
 
@@ -55,7 +56,7 @@ The backend server relies on runtime environment variables loaded via process en
 | `NODE_ENV` | String | `production` | Enables production mode optimizations. |
 | `PORT` | Integer | `5000` | HTTP application port for Express server & Socket.io listener. |
 | `WS_PORT` | Integer | `8080` | Separate WebSocket listener port (optional fallback). |
-| `CORS_ORIGIN` | String / CS List | `*` | Allowed CORS origins. In production, restrict to domain (e.g. `https://uniportal.edu`). |
+| `CORS_ORIGIN` | String / CS List | `*` | Allowed CORS origins. In production, set to frontend URL (e.g. `https://uniportal-frontend.onrender.com`). |
 | `DATABASE_URL` | String (URI) | Required | PostgreSQL connection URI (e.g., `postgres://user:pass@host:5432/uniportal`). |
 | `JWT_SECRET` | String | Required | Secret key used for signing and verifying backend JWT tokens. |
 | `SERVICE_ACCOUNT_PATH` | String (Path) | `./serviceAccountKey.json` | Relative path to Firebase Admin SDK JSON credentials file. |
@@ -82,14 +83,16 @@ For deployments utilizing the Django REST API backend:
 
 UniPortal supports multi-platform cloud deployments with standardized configuration manifests included in the repository:
 
-### 1. Docker & Containerization (`Dockerfile` & `docker-compose.yml`)
+### 1. Render Infrastructure Blueprint (`render.yaml`)
+Render provisions three connected resources via Blueprint:
+* **Backend Web Service (`uniportal-backend`):** Docker runtime running `server.js` on port `5000`. Connected to `uniportal-db` via `DATABASE_URL` and accepts `CORS_ORIGIN` from `uniportal-frontend`.
+* **Frontend Static Site (`uniportal-frontend`):** Vite static site built with `npm run build` from `./dist`, configured with SPA rewrite rules (`/*` -> `/index.html`), automatically receiving `VITE_API_URL` and `VITE_SOCKET_URL` pointing to `uniportal-backend`.
+* **PostgreSQL Database (`uniportal-db`):** Managed PostgreSQL database.
+
+### 2. Docker & Containerization (`Dockerfile` & `docker-compose.yml`)
 * **Multi-stage Build:** Utilizes `node:20-slim` image with C/C++ compilation tools for native modules (`sqlite3`).
 * **Container Expose:** Port `5000`.
 * **Execution Command:** `npm run server` (starts `server.js`).
-
-### 2. Render (`render.yaml`)
-* Serves dual-tier infrastructure: Web Service (`uniportal`) and PostgreSQL database (`uniportal-db`).
-* Environment injection via Render Dashboard or Blueprint automatic link.
 
 ### 3. Railway (`railway.json`)
 * Uses Docker build provider (`railway.json` with `watchPatterns`).
@@ -108,6 +111,6 @@ UniPortal supports multi-platform cloud deployments with standardized configurat
 ## 🛡️ Production Security & Operational Best Practices
 
 1. **Secret Management:** Ensure `JWT_SECRET`, `GOOGLE_AI_KEY`, `EMAIL_PASS`, and database credentials are stored in secure environment managers (e.g., Render Environment Secrets, Fly Secrets, Railway Variables) and never committed to version control.
-2. **CORS Restrictions:** Set `CORS_ORIGIN` explicitly to the deployed frontend domain in production rather than wildcard (`*`).
+2. **CORS Restrictions:** Set `CORS_ORIGIN` explicitly to the deployed frontend domain in production (`https://<your-static-site>.onrender.com`).
 3. **Database Migration:** Run `npm run migrate:pg` when transitioning from local development SQLite store to production PostgreSQL cluster.
 4. **Logging & Auditing:** Production error and transaction logs are stored in `logs/error.log` and `logs/combined.log` using Winston, while critical tenant operations record immutable audit entries in the `AuditLogs` table.

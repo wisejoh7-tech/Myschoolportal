@@ -1,6 +1,7 @@
 services:
+  # ⚙️ BACKEND WEB SERVICE (Node.js / Express API + Socket.io Server)
   - type: web
-    name: uniportal
+    name: uniportal-backend
     runtime: docker
     plan: free
     rootDir: .
@@ -18,8 +19,36 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      - key: CORS_ORIGIN
+        fromService:
+          type: static
+          name: uniportal-frontend
+          property: url
+
+  # 💻 FRONTEND STATIC SITE (React 19 + Vite Frontend App)
+  - type: static
+    name: uniportal-frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    autoDeployTrigger: commit
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: uniportal-backend
+          property: url
+      - key: VITE_SOCKET_URL
+        fromService:
+          type: web
+          name: uniportal-backend
+          property: url
 
 databases:
+  # 🐘 POSTGRESQL DATABASE
   - name: uniportal-db
     databaseName: uniportal
     user: uniportal_user
