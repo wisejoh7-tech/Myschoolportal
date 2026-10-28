@@ -10,8 +10,12 @@ import { UserProfile } from './types';
 import Layout from './layouts/Layout';
 import Home from './pages/Home';
 import AdminDashboard from './features/admin/AdminDashboard';
+import OwnerDashboard from './features/admin/OwnerDashboard';
 import AdminAuth from './features/auth/AdminAuth';
 import StudentPortal from './features/student/StudentPortal';
+import ParentDashboard from './features/parent/ParentDashboard';
+import BursarDashboard from './features/finances/BursarDashboard';
+import TeacherDashboard from './features/academics/TeacherDashboard';
 import AdmissionForm from './features/academics/AdmissionForm';
 import CourseRegistration from './features/academics/CourseRegistration';
 import PaymentPortal from './features/finances/PaymentPortal';
@@ -97,16 +101,29 @@ export default function App() {
 
           <Route path="/entrance-exam" element={<EntranceExamPortal user={user} />} />
           <Route path="/admission" element={user ? <AdmissionForm user={user} /> : <Navigate to="/auth" />} />
-          <Route path="/portal" element={(simulatedUser || user)?.role === 'student' ? <StudentPortal user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
+          <Route path="/portal" element={
+            (simulatedUser || user)?.role === 'parent' ? <ParentDashboard user={(simulatedUser || user)!} /> :
+            (simulatedUser || user)?.role === 'bursar' ? <BursarDashboard user={(simulatedUser || user)!} /> :
+            (simulatedUser || user)?.role === 'teacher' ? <TeacherDashboard user={(simulatedUser || user)!} /> :
+            (simulatedUser || user)?.role === 'school_owner' ? <OwnerDashboard user={(simulatedUser || user)!} /> :
+            (simulatedUser || user)?.role === 'student' ? <StudentPortal user={(simulatedUser || user)!} /> :
+            <Navigate to="/auth" />
+          } />
           <Route path="/courses" element={(simulatedUser || user)?.role === 'student' ? <CourseRegistration user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
           <Route path="/payments" element={(simulatedUser || user) ? <PaymentPortal user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
           <Route path="/remita-payment" element={(simulatedUser || user) ? <RemitaPayment user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
           <Route path="/hostels" element={(simulatedUser || user)?.role === 'student' ? <HostelAllocation user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
-          <Route path="/results" element={(simulatedUser || user)?.role === 'student' ? <Results user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
+          <Route path="/results" element={(simulatedUser || user) ? <Results user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
           <Route path="/loan" element={(simulatedUser || user) ? <LoanApplicationForm user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
 
+          {/* Role Dashboards */}
+          <Route path="/parent" element={(simulatedUser || user)?.role === 'parent' ? <ParentDashboard user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
+          <Route path="/bursar" element={(simulatedUser || user)?.role === 'bursar' ? <BursarDashboard user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
+          <Route path="/teacher" element={(simulatedUser || user)?.role === 'teacher' ? <TeacherDashboard user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
+          <Route path="/owner" element={(simulatedUser || user)?.role === 'school_owner' ? <OwnerDashboard user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
+
           {/* Protected Admin Dashboard */}
-          <Route path="/admin" element={(simulatedUser || user)?.role === 'admin' ? <AdminDashboard user={(simulatedUser || user)!} onSimulateLogin={setSimulatedUser} /> : <Navigate to={`/${SECRET_ADMIN_PATH}`} />} />
+          <Route path="/admin" element={['admin', 'school_owner'].includes((simulatedUser || user)?.role || '') ? <AdminDashboard user={(simulatedUser || user)!} onSimulateLogin={setSimulatedUser} /> : <Navigate to={`/${SECRET_ADMIN_PATH}`} />} />
           <Route path="/admin/" element={<Navigate to="/admin" replace />} />
 
               {/* Catch-all for deleted /admin/login */}
