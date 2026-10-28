@@ -15,6 +15,7 @@ import AdminAuth from './features/auth/AdminAuth';
 import StudentPortal from './features/student/StudentPortal';
 import ParentDashboard from './features/parent/ParentDashboard';
 import BursarDashboard from './features/finances/BursarDashboard';
+import BankReconciliation from './features/finances/BankReconciliation';
 import TeacherDashboard from './features/academics/TeacherDashboard';
 import AdmissionForm from './features/academics/AdmissionForm';
 import CourseRegistration from './features/academics/CourseRegistration';
@@ -116,9 +117,10 @@ export default function App() {
           <Route path="/results" element={(simulatedUser || user) ? <Results user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
           <Route path="/loan" element={(simulatedUser || user) ? <LoanApplicationForm user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
 
-          {/* Role Dashboards */}
+          {/* Role Dashboards & Reconciliation */}
           <Route path="/parent" element={(simulatedUser || user)?.role === 'parent' ? <ParentDashboard user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
           <Route path="/bursar" element={(simulatedUser || user)?.role === 'bursar' ? <BursarDashboard user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
+          <Route path="/reconciliation" element={['bursar', 'admin', 'school_owner'].includes((simulatedUser || user)?.role || '') ? <BankReconciliation user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
           <Route path="/teacher" element={(simulatedUser || user)?.role === 'teacher' ? <TeacherDashboard user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
           <Route path="/owner" element={(simulatedUser || user)?.role === 'school_owner' ? <OwnerDashboard user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
 
