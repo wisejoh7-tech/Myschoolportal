@@ -29,7 +29,7 @@ services:
   - type: static
     name: uniportal-frontend
     buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
+    staticPublishPath: dist
     autoDeployTrigger: commit
     routes:
       - type: rewrite
