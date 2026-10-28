@@ -238,6 +238,7 @@ export interface BankDetails {
   accountNumber: string;
   accountName: string;
 }
+
 export type ClearanceStatus = 'uploaded' | 'verified' | 'rejected' | 'pending';
 export interface ClearanceRecord {
   id?: string;
@@ -247,4 +248,91 @@ export interface ClearanceRecord {
   ageDeclarationUrl?: string;
   status: ClearanceStatus;
   updatedAt: string;
+}
+
+export interface BankAccount {
+  id: string;
+  tenantId?: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  currency: string;
+  openingBalance: number;
+  currentBalance: number;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export interface BankStatement {
+  id: string;
+  tenantId?: string;
+  bankAccountId: string;
+  transactionDate: string;
+  valueDate?: string;
+  description: string;
+  transactionRef: string;
+  amount: number;
+  type: 'credit' | 'debit';
+  category: 'student_fee' | 'bank_charge' | 'refund' | 'transfer' | 'unclassified';
+  reconciliationStatus: 'unmatched' | 'matched' | 'ignored';
+  matchedStudentUid?: string;
+  matchedInvoiceId?: string;
+  matchedReceiptId?: string;
+  matchedPaymentId?: string;
+  batchId?: string;
+  importedAt?: string;
+  BankAccount?: Partial<BankAccount>;
+  FeeInvoice?: Partial<FeeInvoice>;
+  Receipt?: Partial<Receipt>;
+  Payment?: Partial<Payment>;
+  User?: Partial<UserProfile>;
+}
+
+export interface BankCharge {
+  id: string;
+  tenantId?: string;
+  bankAccountId: string;
+  statementId?: string;
+  chargeType: string;
+  amount: number;
+  description: string;
+  date: string;
+}
+
+export interface FeeRefund {
+  id: string;
+  tenantId?: string;
+  studentUid: string;
+  invoiceId?: string;
+  receiptId?: string;
+  paymentId?: string;
+  statementId?: string;
+  amount: number;
+  reason: string;
+  refundDate: string;
+  processedByUid?: string;
+  status: string;
+  User?: Partial<UserProfile>;
+  FeeInvoice?: Partial<FeeInvoice>;
+}
+
+export interface ReconciliationReport {
+  bankAccounts: BankAccount[];
+  totalOpeningBalance: number;
+  totalCurrentBankBalance: number;
+  expectedBankBalance: number;
+  discrepancy: number;
+  totalStatementCredits: number;
+  totalStatementDebits: number;
+  matchedCreditAmount: number;
+  unmatchedCreditAmount: number;
+  matchedCount: number;
+  unmatchedCount: number;
+  totalBankCharges: number;
+  totalFeeRefunds: number;
+  totalPortalCollectedFees: number;
+  totalPortalInvoicedFees: number;
+  totalOutstandingInvoices: number;
+  isReconciled: boolean;
+  generatedAt: string;
 }

@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, FeeInvoice, Receipt } from '../../types';
 import api from '../../api/axios';
 import { toast } from 'sonner';
-import { CreditCard, FileText, Plus, DollarSign, Download, CheckCircle2, TrendingUp } from 'lucide-react';
+import { CreditCard, FileText, Plus, DollarSign, Download, CheckCircle2, TrendingUp, Building2, RefreshCw } from 'lucide-react';
+import BankReconciliation from './BankReconciliation';
 
 interface BursarDashboardProps {
   user: UserProfile;
 }
 
 export default function BursarDashboard({ user }: BursarDashboardProps) {
+  const [activeTab, setActiveTab] = useState<'invoicing' | 'reconciliation'>('invoicing');
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [invoices, setInvoices] = useState<FeeInvoice[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -79,17 +81,37 @@ export default function BursarDashboard({ user }: BursarDashboardProps) {
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8">
       {/* Header */}
-      <div className="bg-emerald-950 text-white rounded-2xl p-6 shadow-xl flex justify-between items-center">
+      <div className="bg-emerald-950 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Treasury & Bursar Command</h1>
           <p className="text-emerald-300 mt-1">
             School Bursar Office • <span className="text-white font-semibold">{user.name}</span>
           </p>
         </div>
-        <div className="bg-emerald-800 px-4 py-2 rounded-xl text-xs font-bold text-emerald-200 border border-emerald-700">
-          Backend Payment Verification Active
+        <div className="flex gap-2 bg-emerald-900/80 p-1.5 rounded-xl border border-emerald-800">
+          <button
+            onClick={() => setActiveTab('invoicing')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 ${
+              activeTab === 'invoicing' ? 'bg-[#008751] text-white shadow' : 'text-emerald-200 hover:text-white'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" /> Invoicing & Receipts
+          </button>
+          <button
+            onClick={() => setActiveTab('reconciliation')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 ${
+              activeTab === 'reconciliation' ? 'bg-[#008751] text-white shadow' : 'text-emerald-200 hover:text-white'
+            }`}
+          >
+            <Building2 className="w-4 h-4" /> Banking & Reconciliation
+          </button>
         </div>
       </div>
+
+      {activeTab === 'reconciliation' ? (
+        <BankReconciliation user={user} />
+      ) : (
+        <>
 
       {/* Analytics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -220,6 +242,8 @@ export default function BursarDashboard({ user }: BursarDashboardProps) {
           </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

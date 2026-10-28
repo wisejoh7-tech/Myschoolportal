@@ -207,6 +207,65 @@ const AuditLog = sequelize.define('AuditLog', {
   timestamp: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
 });
 
+const BankAccount = sequelize.define('BankAccount', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  tenantId: { type: DataTypes.STRING, defaultValue: 'default_school' },
+  bankName: { type: DataTypes.STRING, allowance: false },
+  accountName: { type: DataTypes.STRING, allowance: false },
+  accountNumber: { type: DataTypes.STRING, allowance: false },
+  currency: { type: DataTypes.STRING, defaultValue: 'NGN' },
+  openingBalance: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
+  currentBalance: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
+  isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
+  createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+});
+
+const BankStatement = sequelize.define('BankStatement', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  tenantId: { type: DataTypes.STRING, defaultValue: 'default_school' },
+  bankAccountId: { type: DataTypes.STRING },
+  transactionDate: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+  valueDate: { type: DataTypes.DATE },
+  description: { type: DataTypes.TEXT },
+  transactionRef: { type: DataTypes.STRING },
+  amount: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
+  type: { type: DataTypes.STRING, defaultValue: 'credit' }, // 'credit' or 'debit'
+  category: { type: DataTypes.STRING, defaultValue: 'unclassified' }, // 'student_fee', 'bank_charge', 'refund', 'transfer', 'unclassified'
+  reconciliationStatus: { type: DataTypes.STRING, defaultValue: 'unmatched' }, // 'unmatched', 'matched', 'ignored'
+  matchedStudentUid: { type: DataTypes.STRING },
+  matchedInvoiceId: { type: DataTypes.STRING },
+  matchedReceiptId: { type: DataTypes.STRING },
+  matchedPaymentId: { type: DataTypes.STRING },
+  batchId: { type: DataTypes.STRING },
+  importedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+});
+
+const BankCharge = sequelize.define('BankCharge', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  tenantId: { type: DataTypes.STRING, defaultValue: 'default_school' },
+  bankAccountId: { type: DataTypes.STRING },
+  statementId: { type: DataTypes.STRING },
+  chargeType: { type: DataTypes.STRING, defaultValue: 'maintenance' }, // 'maintenance', 'transfer_fee', 'stamp_duty', 'other'
+  amount: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
+  description: { type: DataTypes.STRING },
+  date: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+});
+
+const FeeRefund = sequelize.define('FeeRefund', {
+  id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  tenantId: { type: DataTypes.STRING, defaultValue: 'default_school' },
+  studentUid: { type: DataTypes.STRING },
+  invoiceId: { type: DataTypes.STRING },
+  receiptId: { type: DataTypes.STRING },
+  paymentId: { type: DataTypes.STRING },
+  statementId: { type: DataTypes.STRING },
+  amount: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
+  reason: { type: DataTypes.TEXT },
+  refundDate: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+  processedByUid: { type: DataTypes.STRING },
+  status: { type: DataTypes.STRING, defaultValue: 'completed' }
+});
+
 // Relationships
 User.hasMany(Payment, { foreignKey: 'uid' });
 Payment.belongsTo(User, { foreignKey: 'uid' });
@@ -229,6 +288,20 @@ AcademicResult.belongsTo(User, { foreignKey: 'studentUid' });
 User.hasMany(ClassAssignment, { foreignKey: 'teacherUid' });
 ClassAssignment.belongsTo(User, { foreignKey: 'teacherUid' });
 
+BankAccount.hasMany(BankStatement, { foreignKey: 'bankAccountId' });
+BankStatement.belongsTo(BankAccount, { foreignKey: 'bankAccountId' });
+
+BankAccount.hasMany(BankCharge, { foreignKey: 'bankAccountId' });
+BankCharge.belongsTo(BankAccount, { foreignKey: 'bankAccountId' });
+
+User.hasMany(FeeRefund, { foreignKey: 'studentUid' });
+FeeRefund.belongsTo(User, { foreignKey: 'studentUid' });
+
+BankStatement.belongsTo(FeeInvoice, { foreignKey: 'matchedInvoiceId' });
+BankStatement.belongsTo(Receipt, { foreignKey: 'matchedReceiptId' });
+BankStatement.belongsTo(Payment, { foreignKey: 'matchedPaymentId' });
+BankStatement.belongsTo(User, { foreignKey: 'matchedStudentUid' });
+
 module.exports = {
   sequelize,
   Op,
@@ -243,5 +316,9 @@ module.exports = {
   ClassAssignment,
   AcademicResult,
   AuditLog,
-  ParentStudent
+  ParentStudent,
+  BankAccount,
+  BankStatement,
+  BankCharge,
+  FeeRefund
 };

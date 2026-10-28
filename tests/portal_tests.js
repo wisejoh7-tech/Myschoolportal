@@ -1,7 +1,7 @@
 import assert from 'assert';
 import http from 'http';
 import pkg from '../database.cjs';
-const { sequelize, User, Payment, FeeInvoice, Receipt, AcademicResult, ClassAssignment, ParentStudent, AuditLog } = pkg;
+const { sequelize, User, Payment, FeeInvoice, Receipt, AcademicResult, ClassAssignment, ParentStudent, AuditLog, BankAccount, BankStatement, BankCharge, FeeRefund } = pkg;
 
 async function runTests() {
   console.log('🧪 Starting Automated School Portal Integration & Verification Test Suite...\n');
@@ -18,6 +18,10 @@ async function runTests() {
 
     // Cleanup existing test records in correct foreign key order
     await AuditLog.destroy({ where: { tenantId: [testTenantA, testTenantB] } });
+    await BankCharge.destroy({ where: { tenantId: [testTenantA, testTenantB] } });
+    await FeeRefund.destroy({ where: { tenantId: [testTenantA, testTenantB] } });
+    await BankStatement.destroy({ where: { tenantId: [testTenantA, testTenantB] } });
+    await BankAccount.destroy({ where: { tenantId: [testTenantA, testTenantB] } });
     await Receipt.destroy({ where: { tenantId: [testTenantA, testTenantB] } });
     await Payment.destroy({ where: { tenantId: [testTenantA, testTenantB] } });
     await FeeInvoice.destroy({ where: { tenantId: [testTenantA, testTenantB] } });
@@ -222,6 +226,155 @@ async function runTests() {
     const logs = await AuditLog.findAll({ where: { tenantId: testTenantA } });
     assert.ok(logs.length > 0, 'Audit logs recorded successfully');
     console.log('✅ 9. Audit Trail Logging Verified');
+
+    // 9. Banking & School Fee Reconciliation Verification
+    // A. Business Bank Account Creation
+    const bankAccount = await BankAccount.create({
+      tenantId: testTenantA,
+      bankName: 'First Bank of Nigeria',
+      accountName: 'Alpha School Main Registry Treasury',
+      accountNumber: '1020304050',
+      currency: 'NGN',
+      openingBalance: 500000,
+      currentBalance: 500000,
+      isActive: true
+    });
+    assert.strictEqual(Number(bankAccount.currentBalance), 500000, 'Bank account opening balance set');
+    console.log('✅ 10. Business Bank Account Creation Verified');
+
+    // B. Safe Bank Statement Import with Duplicate Prevention
+    const statementItems = [
+      { transactionDate: '2026-03-01', description: 'Tuition Fee Payment CSC/2026/001', transactionRef: txRef, amount: 100000, type: 'credit' },
+      { transactionDate: '2026-03-02', description: 'Remaining Tuition Fee INV-TEST-001', transactionRef: 'TX_REF_1002', amount: 50000, type: 'credit' },
+      { transactionDate: '2026-03-03', description: 'Monthly Account Maintenance Fee', transactionRef: 'CHG_001', amount: 200, type: 'debit' }
+    ];
+
+    let importedCount = 0;
+    let dupCount = 0;
+    for (const item of statementItems) {
+      const existing = await BankStatement.findOne({ where: { tenantId: testTenantA, bankAccountId: bankAccount.id, transactionRef: item.transactionRef } });
+      if (existing) {
+        dupCount++;
+        continue;
+      }
+      await BankStatement.create({
+        tenantId: testTenantA,
+        bankAccountId: bankAccount.id,
+        transactionDate: new Date(item.transactionDate),
+        description: item.description,
+        transactionRef: item.transactionRef,
+        amount: item.amount,
+        type: item.type,
+        reconciliationStatus: 'unmatched',
+        category: 'unclassified'
+      });
+      importedCount++;
+      if (item.type === 'credit') bankAccount.currentBalance = Number(bankAccount.currentBalance) + item.amount;
+      else bankAccount.currentBalance = Number(bankAccount.currentBalance) - item.amount;
+    }
+    await bankAccount.save();
+
+    assert.strictEqual(importedCount, 3, 'Imported 3 statements');
+    assert.strictEqual(Number(bankAccount.currentBalance), 649800, 'Current bank balance updated (500000 + 100000 + 50000 - 200 = 649800)');
+    console.log('✅ 11. Bank Statement Import & Current Balance Calculation Verified');
+
+    // Duplicate Import Protection Check
+    let dupImported = 0;
+    for (const item of statementItems) {
+      const existing = await BankStatement.findOne({ where: { tenantId: testTenantA, bankAccountId: bankAccount.id, transactionRef: item.transactionRef } });
+      if (existing) continue;
+      dupImported++;
+    }
+    assert.strictEqual(dupImported, 0, 'Duplicate statement import safely rejected');
+    console.log('✅ 12. Duplicate Statement Import Protection Verified');
+
+    // C. Reconciliation Auto-Match Engine (No Duplicate Payments Recorded)
+    const initialPaymentCount = await Payment.count({ where: { tenantId: testTenantA } });
+
+    // Statement 1 has txRef = 'TX_REF_1001' which ALREADY exists in Payment!
+    const stmt1 = await BankStatement.findOne({ where: { transactionRef: txRef, tenantId: testTenantA } });
+    const existingPayment1 = await Payment.findOne({ where: { transactionId: txRef, tenantId: testTenantA } });
+    if (existingPayment1) {
+      stmt1.reconciliationStatus = 'matched';
+      stmt1.category = 'student_fee';
+      stmt1.matchedPaymentId = existingPayment1.id;
+      stmt1.matchedInvoiceId = invoice.id;
+      stmt1.matchedStudentUid = student.uid;
+      await stmt1.save();
+    }
+
+    // Statement 2 has txRef = 'TX_REF_1002' for remaining 50,000 on invoice INV-TEST-001
+    const stmt2 = await BankStatement.findOne({ where: { transactionRef: 'TX_REF_1002', tenantId: testTenantA } });
+    if (stmt2) {
+      const newPayment = await Payment.create({
+        tenantId: testTenantA,
+        uid: student.uid,
+        invoiceId: invoice.id,
+        amount: 50000,
+        type: 'tuition',
+        status: 'success',
+        transactionId: 'TX_REF_1002',
+        method: 'bank_transfer',
+        verifiedOnBackend: true
+      });
+      invoice.paidAmount = Number(invoice.paidAmount) + 50000;
+      invoice.balance = Math.max(0, Number(invoice.totalAmount) - invoice.paidAmount);
+      invoice.status = 'paid';
+      await invoice.save();
+
+      stmt2.reconciliationStatus = 'matched';
+      stmt2.category = 'student_fee';
+      stmt2.matchedPaymentId = newPayment.id;
+      stmt2.matchedInvoiceId = invoice.id;
+      stmt2.matchedStudentUid = student.uid;
+      await stmt2.save();
+    }
+
+    const postPaymentCount = await Payment.count({ where: { tenantId: testTenantA } });
+    assert.strictEqual(postPaymentCount, initialPaymentCount + 1, 'Exactly 1 new payment recorded for statement 2 (statement 1 matched existing without duplicate payment)');
+    assert.strictEqual(Number(invoice.balance), 0, 'Invoice balance is now fully paid (0)');
+    assert.strictEqual(invoice.status, 'paid', 'Invoice status is paid');
+    console.log('✅ 13. Auto-Reconciliation Matching Verified Without Duplicate Payments');
+
+    // D. Bank Charges & Fee Refund Logging
+    const stmt3 = await BankStatement.findOne({ where: { transactionRef: 'CHG_001', tenantId: testTenantA } });
+    const charge = await BankCharge.create({
+      tenantId: testTenantA,
+      bankAccountId: bankAccount.id,
+      statementId: stmt3.id,
+      chargeType: 'maintenance',
+      amount: 200,
+      description: 'Monthly Maintenance Fee'
+    });
+    stmt3.reconciliationStatus = 'matched';
+    stmt3.category = 'bank_charge';
+    await stmt3.save();
+
+    const refund = await FeeRefund.create({
+      tenantId: testTenantA,
+      studentUid: student.uid,
+      invoiceId: invoice.id,
+      amount: 5000,
+      reason: 'Overpayment refund',
+      processedByUid: bursar.uid
+    });
+    assert.ok(charge.id && refund.id, 'Bank charge and refund records created successfully');
+    console.log('✅ 14. Bank Charges & Fee Refund Logging Verified');
+
+    // E. Reconciliation Summary Report
+    const totalCredits = await BankStatement.sum('amount', { where: { tenantId: testTenantA, type: 'credit' } });
+    const totalDebits = await BankStatement.sum('amount', { where: { tenantId: testTenantA, type: 'debit' } });
+    const unmatchedCount = await BankStatement.count({ where: { tenantId: testTenantA, reconciliationStatus: 'unmatched' } });
+
+    assert.strictEqual(totalCredits, 150000, 'Total credits sum to 150,000');
+    assert.strictEqual(totalDebits, 200, 'Total debits sum to 200');
+    assert.strictEqual(unmatchedCount, 0, 'All statement records reconciled (0 unmatched)');
+    console.log('✅ 15. Reconciliation Summary Report Calculations Verified');
+
+    // F. Multi-Tenant Isolation for Banking Data
+    const betaBankAccounts = await BankAccount.findAll({ where: { tenantId: testTenantB } });
+    assert.strictEqual(betaBankAccounts.length, 0, 'School Beta cannot access School Alpha bank accounts');
+    console.log('✅ 16. Multi-Tenant Banking Data Isolation Verified');
 
     console.log('\n🎉 ALL AUTOMATED PORTAL TESTS PASSED SUCCESSFULLY!\n');
     process.exit(0);

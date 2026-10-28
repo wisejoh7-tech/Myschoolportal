@@ -70,6 +70,9 @@ export default function Layout({ children, user }: LayoutProps) {
                       <NavLink to="/payments" active={isActive('/payments')} icon={<CreditCard className="w-4 h-4" />}>Treasury</NavLink>
                     </>
                   )}
+                  {['bursar', 'admin', 'school_owner'].includes(user.role) && (
+                    <NavLink to="/reconciliation" active={isActive('/reconciliation')} icon={<CreditCard className="w-4 h-4" />}>Reconciliation</NavLink>
+                  )}
                 </>
               )}
             </div>
