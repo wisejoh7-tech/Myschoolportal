@@ -103,11 +103,14 @@ export default function App() {
           <Route path="/entrance-exam" element={<EntranceExamPortal user={user} />} />
           <Route path="/admission" element={user ? <AdmissionForm user={user} /> : <Navigate to="/auth" />} />
           <Route path="/portal" element={
+            (simulatedUser || user)?.role === 'admin' ? <AdminDashboard user={(simulatedUser || user)!} onSimulateLogin={setSimulatedUser} /> :
             (simulatedUser || user)?.role === 'parent' ? <ParentDashboard user={(simulatedUser || user)!} /> :
             (simulatedUser || user)?.role === 'bursar' ? <BursarDashboard user={(simulatedUser || user)!} /> :
             (simulatedUser || user)?.role === 'teacher' ? <TeacherDashboard user={(simulatedUser || user)!} /> :
             (simulatedUser || user)?.role === 'school_owner' ? <OwnerDashboard user={(simulatedUser || user)!} /> :
             (simulatedUser || user)?.role === 'student' ? <StudentPortal user={(simulatedUser || user)!} /> :
+            (simulatedUser || user)?.role === 'applicant' ? <Navigate to="/admission" /> :
+            (simulatedUser || user) ? <Navigate to="/" /> :
             <Navigate to="/auth" />
           } />
           <Route path="/courses" element={(simulatedUser || user)?.role === 'student' ? <CourseRegistration user={(simulatedUser || user)!} /> : <Navigate to="/auth" />} />
@@ -128,8 +131,9 @@ export default function App() {
           <Route path="/admin" element={['admin', 'school_owner'].includes((simulatedUser || user)?.role || '') ? <AdminDashboard user={(simulatedUser || user)!} onSimulateLogin={setSimulatedUser} /> : <Navigate to={`/${SECRET_ADMIN_PATH}`} />} />
           <Route path="/admin/" element={<Navigate to="/admin" replace />} />
 
-              {/* Catch-all for deleted /admin/login */}
-              <Route path="/admin/login" element={<Navigate to="/" />} />
+              {/* Catch-all for deleted /admin/login and invalid routes */}
+              <Route path="/admin/login" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
         </ErrorBoundary>
