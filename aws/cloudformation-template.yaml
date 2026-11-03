@@ -1,0 +1,399 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS Infrastructure CloudFormation Template for UniPortal V3:
+  - Frontend: Amazon S3 (private) + CloudFront with Origin Access Control (OAC), HTTPS, SPA fallback
+  - Database: Amazon RDS for PostgreSQL (Multi-AZ optional, encrypted, automated backups)
+  - Backend: AWS App Runner Service (Node.js/Express or Django container) with Health Check & Auto-Scaling
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+    Description: Environment stage (production, staging, dev)
+
+  DBMasterUsername:
+    Type: String
+    Default: uniadmin
+    Description: Master username for Amazon RDS PostgreSQL instance
+
+  DBMasterUserPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: Master password for Amazon RDS PostgreSQL instance
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    Description: Database instance class for Amazon RDS
+
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+    Description: Allocated storage in GB for RDS PostgreSQL
+
+  BackendContainerImage:
+    Type: String
+    Default: public.ecr.aws/docker/library/node:20-slim
+    Description: Container image URI for backend deployment in AWS App Runner or ECR
+
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Default: uniportal-production-jwt-secret-2026
+    Description: Secret key used to sign and verify JWT authentication tokens
+
+  GoogleAiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Google Gemini API key for contextual AI tutor
+
+Resources:
+  # =========================================================================
+  # 🌐 1. VPC & NETWORKING (For RDS & Container Backend)
+  # =========================================================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-vpc
+
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-subnet-a
+
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-subnet-b
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-igw
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetA
+      RouteTableId: !Ref RouteTable
+
+  SubnetRouteTableAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetB
+      RouteTableId: !Ref RouteTable
+
+  # =========================================================================
+  # 🐘 2. AMAZON RDS POSTGRESQL DATABASE
+  # =========================================================================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for UniPortal RDS PostgreSQL
+      SubnetIds:
+        - !Ref SubnetA
+        - !Ref SubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-db-subnet-group
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for UniPortal Amazon RDS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-db-sg
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${AWS::StackName}-postgres
+      Engine: postgres
+      EngineVersion: "15"
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBName: uniportal
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterUserPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      PubliclyAccessible: true
+      StorageEncrypted: true
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # =========================================================================
+  # 🚀 3. AWS APP RUNNER (BACKEND SERVICE)
+  # =========================================================================
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-apprunner-instance-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+
+  AppRunnerService:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Sub ${AWS::StackName}-backend
+      SourceConfiguration:
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: !Ref BackendContainerImage
+          ImageRepositoryType: ECR_PUBLIC
+          ImageConfiguration:
+            Port: "5000"
+            RuntimeEnvironmentVariables:
+              - Name: NODE_ENV
+                Value: production
+              - Name: PORT
+                Value: "5000"
+              - Name: JWT_SECRET
+                Value: !Ref JwtSecret
+              - Name: GOOGLE_AI_KEY
+                Value: !Ref GoogleAiKey
+              - Name: RDS_HOSTNAME
+                Value: !GetAtt RDSInstance.Endpoint.Address
+              - Name: RDS_PORT
+                Value: !GetAtt RDSInstance.Endpoint.Port
+              - Name: RDS_DB_NAME
+                Value: uniportal
+              - Name: RDS_USERNAME
+                Value: !Ref DBMasterUsername
+              - Name: RDS_PASSWORD
+                Value: !Ref DBMasterUserPassword
+              - Name: DATABASE_URL
+                Value: !Sub "postgres://${DBMasterUsername}:${DBMasterUserPassword}@${RDSInstance.Endpoint.Address}:${RDSInstance.Endpoint.Port}/uniportal"
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /api/health
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 3
+      InstanceConfiguration:
+        Cpu: 1 vCPU
+        Memory: 2 GB
+        InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # =========================================================================
+  # 📦 4. FRONTEND AMAZON S3 BUCKET (STATIC ASSETS)
+  # =========================================================================
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-frontend-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-frontend-bucket
+
+  # =========================================================================
+  # ⚡ 5. AMAZON CLOUDFRONT DISTRIBUTION + ORIGIN ACCESS CONTROL (OAC)
+  # =========================================================================
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${AWS::StackName}-s3-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  FrontendCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: CloudFront Distribution for UniPortal V3 Frontend (S3 + OAC + HTTPS)
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        Origins:
+          # S3 Frontend Origin
+          - Id: S3FrontendOrigin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          # Backend API Origin (App Runner / HTTPS API)
+          - Id: BackendApiOrigin
+            DomainName: !GetAtt AppRunnerService.ServiceUrl
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: S3FrontendOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          Compress: true
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+          MinTTL: 0
+        CacheBehaviors:
+          # Route all /api/* directly to Backend API with zero caching
+          - PathPattern: /api/*
+            TargetOriginId: BackendApiOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+              - PUT
+              - POST
+              - PATCH
+              - DELETE
+            ForwardedValues:
+              QueryString: true
+              Headers:
+                - Authorization
+                - Content-Type
+                - Accept
+                - X-Tenant-Id
+              Cookies:
+                Forward: all
+            MinTTL: 0
+            DefaultTTL: 0
+            MaxTTL: 0
+        # Single Page Application (SPA) Error Responses for Client-Side Routing
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 10
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 10
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${FrontendBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${FrontendCloudFrontDistribution}
+
+Outputs:
+  FrontendBucketName:
+    Description: S3 Bucket Name for Frontend Static Assets
+    Value: !Ref FrontendBucket
+
+  CloudFrontDomainName:
+    Description: HTTPS URL for the CloudFront Distribution
+    Value: !Sub https://${FrontendCloudFrontDistribution.DomainName}
+
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID (for cache invalidation)
+    Value: !Ref FrontendCloudFrontDistribution
+
+  BackendAppRunnerUrl:
+    Description: Direct HTTPS URL for AWS App Runner Backend Service
+    Value: !Sub https://${AppRunnerService.ServiceUrl}
+
+  RDSEndpoint:
+    Description: Amazon RDS PostgreSQL Database Host
+    Value: !GetAtt RDSInstance.Endpoint.Address
+
+  DatabaseUrl:
+    Description: PostgreSQL Connection String
+    Value: !Sub postgres://${DBMasterUsername}:${DBMasterUserPassword}@${RDSInstance.Endpoint.Address}:${RDSInstance.Endpoint.Port}/uniportal

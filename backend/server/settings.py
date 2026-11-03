@@ -87,8 +87,23 @@ WSGI_APPLICATION = "server.wsgi.application"
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+RDS_HOSTNAME = os.getenv("RDS_HOSTNAME")
 
-if DATABASE_URL and (DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://")):
+if RDS_HOSTNAME:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("RDS_DB_NAME", "uniportal"),
+            "USER": os.getenv("RDS_USERNAME", "postgres"),
+            "PASSWORD": os.getenv("RDS_PASSWORD", ""),
+            "HOST": RDS_HOSTNAME,
+            "PORT": os.getenv("RDS_PORT", "5432"),
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "600")),
+        }
+    }
+    if os.getenv("RDS_DISABLE_SSL", "false").lower() != "true" and os.getenv("PG_SSL", "true").lower() != "false":
+        DATABASES["default"]["OPTIONS"] = {"sslmode": "require"}
+elif DATABASE_URL and (DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://")):
     import urllib.parse
     url = urllib.parse.urlparse(DATABASE_URL)
     db_name = url.path[1:] if url.path else 'uniportal'
@@ -102,8 +117,11 @@ if DATABASE_URL and (DATABASE_URL.startswith("postgres://") or DATABASE_URL.star
             "PASSWORD": urllib.parse.unquote(url.password or ''),
             "HOST": url.hostname,
             "PORT": url.port or 5432,
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "600")),
         }
     }
+    if os.getenv("RDS_DISABLE_SSL", "false").lower() != "true" and os.getenv("PG_SSL", "true").lower() != "false":
+        DATABASES["default"]["OPTIONS"] = {"sslmode": "require"}
 elif DATABASE_URL and (DATABASE_URL.startswith("sqlite://") or DATABASE_URL.startswith("sqlite:")):
     sqlite_path = DATABASE_URL.replace("sqlite://", "").replace("sqlite:", "") or "uniportal.sqlite"
     DATABASES = {

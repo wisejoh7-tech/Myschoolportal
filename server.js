@@ -212,6 +212,31 @@ async function sendOfficialEmail({ to, subject, body }) {
 }
 
 // ------------------------------------------------------------------
+// 🩺 HEALTH CHECK ENDPOINTS (AWS ALB / ECS / App Runner)
+// ------------------------------------------------------------------
+app.get(['/health', '/api/health', '/api/health/'], async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    res.status(200).json({
+      status: 'healthy',
+      service: 'uniportal-node-server',
+      database: 'connected',
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: process.uptime()
+    });
+  } catch (error) {
+    logger.error('Health check database connection failure:', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      service: 'uniportal-node-server',
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// ------------------------------------------------------------------
 // 🚀 AUTHENTICATION & ACCOUNTS ENDPOINTS
 // ------------------------------------------------------------------
 
