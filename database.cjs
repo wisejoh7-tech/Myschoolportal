@@ -1,16 +1,33 @@
 const { Sequelize, DataTypes, Op } = require('sequelize');
 require('dotenv').config();
 
-const dbUrl = process.env.DATABASE_URL;
+// Construct connection from standard DATABASE_URL or Amazon RDS environment variables
+let dbUrl = process.env.DATABASE_URL;
+
+if (!dbUrl && process.env.RDS_HOSTNAME) {
+  const user = encodeURIComponent(process.env.RDS_USERNAME || 'postgres');
+  const password = encodeURIComponent(process.env.RDS_PASSWORD || '');
+  const host = process.env.RDS_HOSTNAME;
+  const port = process.env.RDS_PORT || 5432;
+  const dbName = process.env.RDS_DB_NAME || 'uniportal';
+  dbUrl = `postgres://${user}:${password}@${host}:${port}/${dbName}`;
+}
 
 let sequelize;
 
 if (dbUrl && (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://'))) {
   const isLocal = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+  const disableSsl = process.env.PG_SSL === 'false' || process.env.RDS_DISABLE_SSL === 'true';
   sequelize = new Sequelize(dbUrl, {
     dialect: 'postgres',
     logging: false,
-    ...(isLocal ? {} : {
+    pool: {
+      max: Number(process.env.DB_POOL_MAX || 10),
+      min: Number(process.env.DB_POOL_MIN || 0),
+      acquire: 30000,
+      idle: 10000
+    },
+    ...((isLocal || disableSsl) ? {} : {
       dialectOptions: {
         ssl: {
           require: true,

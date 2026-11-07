@@ -47,7 +47,24 @@ docker-compose up --build
 
 ---
 
-## 🌐 Deploying to Hosting Platforms
+## 🌐 Deploying to Cloud & Hosting Platforms
+
+### 0. ☁️ Deploying to Amazon Web Services (AWS)
+
+UniPortal V3 provides turnkey infrastructure and configuration for deploying to **AWS**:
+- **Frontend:** AWS S3 + CloudFront (React, Vite, TypeScript, HTTPS API requests, SPA routing with OAC).
+- **Backend:** AWS App Runner or AWS ECS Fargate (Node.js/Express or Django REST Framework).
+- **Database:** Amazon RDS (PostgreSQL 15 with automated backups and SSL).
+
+#### Quick AWS Deployment Options:
+1. **AWS CloudFormation:** Deploy `aws/cloudformation-template.yaml` to provision S3, CloudFront, RDS PostgreSQL, and App Runner in one command.
+2. **Terraform IaC:** Apply modular Terraform in `aws/terraform/`.
+3. **Automated CI/CD:** Ready-to-use GitHub Actions workflow in `.github/workflows/deploy-aws.yml`.
+4. **S3 Deploy Script:** Run `./scripts/deploy_s3_cloudfront.sh` to compile frontend and sync to S3 with cache invalidation.
+
+📖 For complete architectural diagrams, step-by-step instructions, and environment configurations, read the **[AWS Deployment Guide](AWS_DEPLOYMENT_GUIDE.md)**.
+
+---
 
 ### 1. 🚀 Deploying to Render
 
