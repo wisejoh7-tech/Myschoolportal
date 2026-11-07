@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { UserProfile } from '../../types';
 import api from '../../api/axios';
 import { toast } from 'sonner';
 import {
   GraduationCap, Clock, CheckCircle2, AlertCircle,
   HelpCircle, ChevronRight, ChevronLeft, ShieldCheck,
-  Send, Sparkles, BookOpen, Award, FileText, Printer, Check
+  Send, Sparkles, BookOpen, Award, FileText, Printer, Check, X, Info, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import CandidateRegistrationSlip from '../../components/CandidateRegistrationSlip';
@@ -27,8 +27,8 @@ export default function EntranceExamPortal({ user }: EntranceExamPortalProps) {
   const [searchParams] = useSearchParams();
   const initialRegNo = searchParams.get('regNo') || user?.jambRegNo || '';
 
-  // Step 1: Login/Reg No Entry -> Step 2: Taking CBT Exam -> Step 3: Result Summary
-  const [examStep, setExamStep] = useState<'login' | 'exam' | 'submitted'>('login');
+  // Step 1: Login/Reg No Entry -> Step 2: Review Instructions -> Step 3: Taking CBT Exam -> Step 4: Result Summary
+  const [examStep, setExamStep] = useState<'login' | 'instructions' | 'exam' | 'submitted'>('login');
 
   // Registration & Stream Config
   const [regNo, setRegNo] = useState(initialRegNo);
@@ -45,9 +45,11 @@ export default function EntranceExamPortal({ user }: EntranceExamPortalProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, number>>({});
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(3600); // 60 mins default
+  const [durationMinutes, setDurationMinutes] = useState(60);
   const [submitting, setSubmitting] = useState(false);
   const [submittedData, setSubmittedData] = useState<any>(null);
   const [showSlipModal, setShowSlipModal] = useState(false);
+  const [showInstructionsModal, setShowInstructionsModal] = useState(false);
 
   // Timer Countdown
   useEffect(() => {
@@ -116,7 +118,9 @@ export default function EntranceExamPortal({ user }: EntranceExamPortalProps) {
       }
 
       setQuestions(qList);
-      setTimeLeftSeconds((res.data.durationMinutes || 60) * 60);
+      const examDuration = res.data.durationMinutes || (res.data.stream === 'Direct Entry' ? 45 : 60);
+      setDurationMinutes(examDuration);
+      setTimeLeftSeconds(examDuration * 60);
 
       const subjects = Array.from(new Set(qList.map(q => q.subject)));
       if (subjects.length > 0) {
@@ -125,12 +129,17 @@ export default function EntranceExamPortal({ user }: EntranceExamPortalProps) {
         setActiveSubject('All');
       }
 
-      setExamStep('exam');
-      toast.success('Entrance Exam Session Initialized! Good Luck.');
+      setExamStep('instructions');
+      toast.success('Registration verified! Please review the examination instructions.');
     } catch (error: any) {
       console.error(error);
       toast.error(error.response?.data?.error || 'Failed to initialize entrance exam session');
     }
+  };
+
+  const handleBeginExam = () => {
+    setExamStep('exam');
+    toast.success('Entrance Exam Started! Timer is running. Best of luck!');
   };
 
   const handleSelectOption = (qId: string, optionIdx: number) => {
@@ -209,18 +218,99 @@ export default function EntranceExamPortal({ user }: EntranceExamPortalProps) {
           </div>
 
           {examStep === 'exam' && (
-            <div className="bg-slate-900/80 backdrop-blur-md border border-emerald-500/30 px-6 py-3 rounded-2xl flex items-center gap-3">
-              <Clock className={`w-5 h-5 ${timeLeftSeconds < 300 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`} />
-              <div>
-                <p className="text-[9px] uppercase tracking-widest text-emerald-300/60 font-black">Time Remaining</p>
-                <p className={`text-2xl font-black font-mono tracking-tight ${timeLeftSeconds < 300 ? 'text-rose-400' : 'text-white'}`}>
-                  {formatTime(timeLeftSeconds)}
-                </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowInstructionsModal(true)}
+                className="bg-emerald-700/80 hover:bg-emerald-700 text-white border border-emerald-500/40 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all shadow-md active:scale-95"
+              >
+                <Info className="w-4 h-4 text-emerald-300" />
+                <span className="hidden sm:inline">Exam Instructions</span>
+              </button>
+              <div className="bg-slate-900/80 backdrop-blur-md border border-emerald-500/30 px-6 py-3 rounded-2xl flex items-center gap-3">
+                <Clock className={`w-5 h-5 ${timeLeftSeconds < 300 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`} />
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest text-emerald-300/60 font-black">Time Remaining</p>
+                  <p className={`text-2xl font-black font-mono tracking-tight ${timeLeftSeconds < 300 ? 'text-rose-400' : 'text-white'}`}>
+                    {formatTime(timeLeftSeconds)}
+                  </p>
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* IN-EXAM INSTRUCTIONS MODAL */}
+      <AnimatePresence>
+        {showInstructionsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Entrance Examination Instructions</h3>
+                    <p className="text-xs text-slate-500">CBT Guidelines & Regulations</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowInstructionsModal(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs text-slate-700 leading-relaxed">
+                <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-start gap-3">
+                  <Clock className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <div>
+                    <span className="font-bold text-slate-900 block mb-0.5">Time Limit & Countdown</span>
+                    Total exam duration is <strong>{durationMinutes} minutes</strong>. When the timer hits 00:00, your current answers are automatically submitted.
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <span className="font-bold text-slate-900 block">Question Navigation & Answering</span>
+                  <ul className="list-disc list-inside space-y-1 text-slate-600">
+                    <li>Use the <strong>Subject Tabs</strong> above the question to filter between different subjects.</li>
+                    <li>Use the <strong>Question Navigator</strong> grid to instantly jump to any question.</li>
+                    <li>Answered questions will turn <strong>green</strong> in the navigator.</li>
+                    <li>You may change your selected option at any time before submitting.</li>
+                  </ul>
+                </div>
+
+                <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 flex items-start gap-3">
+                  <Award className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+                  <div>
+                    <span className="font-bold text-amber-900 block mb-0.5">Post-Exam Result Release to Student Dashboard</span>
+                    Once submitted, your responses are scored and forwarded to the <strong>Admin Control Panel</strong>. The Registry Admin will review and release your score directly to your <strong>Student Dashboard</strong> to guarantee your official admission.
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => setShowInstructionsModal(false)}
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+                >
+                  Return to Exam
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* STEP 1: LOGIN / ENTRANCE REGISTRATION NUMBER */}
       {examStep === 'login' && (
@@ -258,13 +348,116 @@ export default function EntranceExamPortal({ user }: EntranceExamPortalProps) {
               onClick={handleStartExam}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-3 active:scale-95"
             >
-              Start Entrance Examination <ChevronRight className="w-4 h-4" />
+              Verify & Read Exam Instructions <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </motion.div>
       )}
 
-      {/* STEP 2: ACTIVE CBT EXAM INTERFACE */}
+      {/* STEP 2: EXAM INSTRUCTIONS & CODE OF CONDUCT */}
+      {examStep === 'instructions' && (
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="bg-white p-8 md:p-12 rounded-3xl border border-slate-200 shadow-sm space-y-8">
+          <div className="max-w-3xl mx-auto space-y-8">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-emerald-100">
+                <BookOpen className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tight italic">
+                CBT Examination Instructions
+              </h2>
+              <p className="text-xs text-slate-500 font-medium">
+                Please review candidate verification details and test rules carefully before launching your examination player.
+              </p>
+            </div>
+
+            {/* Candidate Verification Card */}
+            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Candidate ID / Reg No</span>
+                <span className="font-mono font-black text-emerald-700 text-sm">{regNo}</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assessment Stream</span>
+                <span className="font-bold text-slate-800">{stream}</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Questions</span>
+                <span className="font-black text-slate-900">{questions.length} Questions</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Time Allowed</span>
+                <span className="font-black text-emerald-700">{durationMinutes} Minutes</span>
+              </div>
+            </div>
+
+            {/* Rules & Guidelines */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" /> Test Regulations & Protocol
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-900">
+                    <Clock className="w-4 h-4 text-emerald-600" /> 1. Countdown Timer & Auto-Submit
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Once you begin, your {durationMinutes}-minute countdown starts. The test will automatically finalize and submit when the timer reaches 00:00.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-900">
+                    <BookOpen className="w-4 h-4 text-emerald-600" /> 2. Question Navigator & Tabs
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Filter questions by subject using the top tabs. Use the Question Navigator grid to jump to any question; answered questions turn green.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-900">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> 3. Options & Answer Modification
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Select any option (A, B, C, or D). Your selection is recorded immediately. You can review and modify your answers at any point prior to final submission.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                    <Award className="w-4 h-4 text-amber-600" /> 4. Admin Release to Student Dashboard
+                  </div>
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    When you submit your exam, your score is transmitted to the Admin Dashboard. The Admin reviews and releases the result to your <strong>Student Dashboard</strong>, officially guaranteeing your admission.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setExamStep('login')}
+                className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-slate-100 text-slate-600 hover:text-slate-900 text-xs font-bold uppercase tracking-wider transition-all"
+              >
+                ← Back to Verification
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBeginExam}
+                className="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-3 active:scale-95"
+              >
+                I Understand All Instructions — Begin Exam Now <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* STEP 3: ACTIVE CBT EXAM INTERFACE */}
       {examStep === 'exam' && currentQ && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
 
@@ -521,7 +714,13 @@ export default function EntranceExamPortal({ user }: EntranceExamPortalProps) {
               </div>
             )}
 
-            <div className="pt-4 flex justify-center gap-4">
+            <div className="pt-4 flex flex-wrap justify-center gap-4">
+              <Link
+                to="/portal"
+                className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-md active:scale-95"
+              >
+                Go to Student Dashboard <ArrowRight className="w-4 h-4" />
+              </Link>
               <button
                 onClick={() => setShowSlipModal(true)}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-3 transition-all shadow-md active:scale-95"
